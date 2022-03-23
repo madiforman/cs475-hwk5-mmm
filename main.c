@@ -7,11 +7,12 @@
 #include "mmm.h"
 
 /* globals (anything here would be shared with all threads) */
-double **mtrx_a;
-double **mtrx_b;
-double **mtrx_c;
-int SIZE;
-int t_num;
+double **MA; /*matrixes A, B, and C*/
+double **MB;
+double **MC;
+double **verify_c; /*for verifying C*/
+int SIZE;		   /*dimension of square matrix*/
+int t_num;		   /*num threads if parallel*/
 
 int main(int argc, char *argv[])
 {
@@ -24,59 +25,73 @@ int main(int argc, char *argv[])
 	{
 		printf("Error: parallel mode requires <size>\n");
 	}
-	// else if (strcmp(argv[1], "S"))
-	// {
-	// 	SIZE = atoi(argv[2]);
-	// 	mtrx_a = mmm_init(SIZE);
-	// 	mtrx_b = mmm_init(SIZE);
-	// 	mtrx_c = mmm_init(SIZE);
-
-	// 	//  mmm_reset(MC, SIZE);
-	// 	double time = mmm_seq(mtrx_a, mtrx_b, mtrx_c, SIZE);
-	// 	print_boilerplate('S', time, SIZE);
-	// }
 	else
 	{
-		t_num = atoi(argv[2]);
-		SIZE = atoi(argv[3]);
-		if (t_num >= SIZE)
+
+		if (strcmp(argv[1], "S") == 0)
 		{
-			t_num = SIZE - 1;
+			SIZE = atoi(argv[2]);
+			MA = mmm_init();
+			MB = mmm_init();
+			MC = create_matrix();
+			printf("========\n");
+			printf("mode: sequential\n");
+			printf("thread count: 1\n");
+			printf("size: %d\n", SIZE);
+			printf("========\n");
+			double time = mmm_seq(MC); /*mmm_seq returns time taken*/
+			printf("Sequential Time: %f\n", time);
+			mmm_freeup('S');
 		}
-		printf("%d\n", SIZE);
-		mtrx_a = mmm_init(SIZE);
-		printf("**************\n");
-		mtrx_b = mmm_init(SIZE);
-		printf("**************\n");
-		mtrx_c = create_matrix();
-		printf("**************\n");
-
-		thread_args args;
-
-		pthread_t threads[t_num];
-		int portion = SIZE / t_num;
-		args.j = portion;
-
-		for (int i = 0; i < t_num; i++)
+		else if (strcmp(argv[1], "P") == 0)
 		{
-			pthread_create(&threads[i], NULL, mmm_par, &args);
-			args.i = args.j;
-			args.j = portion * (i + 2);
-		}
+			SIZE = atoi(argv[3]);
+			MA = mmm_init();
+			MB = mmm_init();
+			MC = create_matrix();
+			verify_c = mmm_init();
 
-		for (int i = 0; i < t_num; i++)
-		{
-			pthread_join(threads[i], NULL);
-		}
+			t_num = atoi(argv[2]);
+			printf("========\n");
+			printf("mode: parallel\n");
+			printf("thread count: %d\n", t_num);
+			printf("size: %d\n", SIZE);
+			printf("========\n");
 
-		printf("Resulting matrix: \n");
-		for (int i = 0; i < SIZE; i++)
-		{
-			for (int j = 0; j < SIZE; j++)
+			double start = rtclock();
+
+			pthread_t threads[t_num]; /*create array of threads and thread arguments*/
+			thread_args t_args[t_num];
+
+			double portion = SIZE / t_num; /*dividing up portions of matrix*/
+
+			for (int i = 0; i < t_num; i++)
 			{
-				printf("%lf \t", mtrx_c[i][j]);
+				if (i == t_num - 1)
+				{
+					t_args[i].end = SIZE;
+				}
+				t_args[i].start = portion * i;
+				t_args[i].end = portion * (i + 1);
+				t_args[i].tid = i;
+
+				pthread_create(&threads[i], NULL, mmm_par, &t_args[i]);
 			}
-			printf("\n");
+			for (int i = 0; i < t_num; i++)
+			{
+				pthread_join(threads[i], NULL);
+			}
+			double end = rtclock();
+
+			double par_time = end - start;
+			double seq_time = mmm_seq(verify_c);
+			double speedup = seq_time / par_time;
+
+			printf("Sequential Time: %lf\n", seq_time);
+			printf("Parallel Time: %lf\n", par_time);
+			printf("Speedup: %lf\n", speedup);
+			printf("Verifying... largest error between parallel and sequential matrix: %lf\n", mmm_verify());
+			mmm_freeup('P');
 		}
 	}
 }
