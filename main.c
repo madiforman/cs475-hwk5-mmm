@@ -1,4 +1,13 @@
 
+/*
+ ============================================================================
+ Name        : Paralellized Matrix Multplication
+ Author      : Madison Sanchez-Forman
+ Version     : 3.23.22
+ Description : Performs parallel or sequential matrix multiplication, and
+ computes the speedup of parallelized algorithm over sequential.
+ ============================================================================
+ */
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
